@@ -218,3 +218,72 @@ with professor as (select * from professor where salario is not null)
 select id_prof, nome, id_dep, salario
 from professor as p1
 where salario >= all (select salario from professor as p2 where p1.id_dep = p2.id_dep);
+--
+with t0 as (
+	select id_aluno, count(*) as n_matriculas
+	from matricula
+	natural join turma
+	where situacao <> 'TRANCADO' and ano = 2025
+	group by id_aluno
+), t1 as (
+	select id_aluno, count(*) as n_participacoes
+	from participacao
+	group by id_aluno
+)
+select aluno.id_aluno,
+	nome,
+	coalesce(n_matriculas, 0) as n_matriculas,
+	coalesce(n_participacoes, 0) as n_participacoes,
+	case when (t0.id_aluno is not null and t1.id_aluno is not null)
+		then 'AMBOS'
+		when (t0.id_aluno is not null) then 'SO_TURMA'
+		else 'SO_PROJETO' end as vinculo
+from t0
+full outer join t1 on t0.id_aluno = t1.id_aluno
+join aluno on aluno.id_aluno = coalesce(t0.id_aluno, t1.id_aluno)
+order by aluno.id_aluno;
+--
+with t0 as (
+	select disciplina.id_dep, turma.id_turma, avg(nota) as media
+	from turma
+	join matricula on matricula.id_turma = turma.id_turma
+	join disciplina on disciplina.id_disc = turma.id_disc
+	where ano = 2025 and situacao in ('APROVADO', 'REPROVADO')
+	group by disciplina.id_dep, turma.id_turma
+	having count(*) >= 3
+)
+select x1.id_dep, x1.id_turma, round(x1.media, 2) as media
+from t0 as x1
+where not exists (
+	select 0
+	from t0 as x2
+	where x1.id_dep = x2.id_dep and x2.media > x1.media
+)
+order by x1.id_dep, x1.id_turma;
+--
+(select id_aluno
+from aluno
+where exists (
+	select 0
+	from matricula
+	natural join turma
+	where matricula.id_aluno = aluno.id_aluno and ano = 2024 and situacao = 'APROVADO'
+)
+intersect
+select id_aluno
+from aluno
+where exists (
+	select 0
+	from matricula
+	natural join turma
+	where matricula.id_aluno = aluno.id_aluno and ano = 2025 and situacao <> 'TRANCADO'
+))
+except
+select id_aluno
+from aluno
+where exists (
+	select 0
+	from matricula
+	natural join turma
+	where matricula.id_aluno = aluno.id_aluno and ano = 2025 and situacao = 'REPROVADO'
+);
